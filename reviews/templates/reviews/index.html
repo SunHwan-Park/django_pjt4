@@ -2,6 +2,7 @@
 {% load bootstrap4 %}
 {% block content %}
 <div class="container">
+    {% if user.is_authenticated %}
     <div class="col-12 d-flex flex-column align-items-center">
       <h1 class="text-center">새로운 사람들을 팔로우 해보세요!</h1>
       <ul>
@@ -12,6 +13,7 @@
       {% endfor %}
       </ul>
     </div>
+    {% endif %}
     <hr>
     <div class="btn-group" role="group">
       <button id="btnGroupDrop1" type="button" class="btn border-info text-secondary dropdown-toggle mb-1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">

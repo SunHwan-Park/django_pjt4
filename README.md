@@ -272,7 +272,7 @@
   ```python
   # accounts/views.py
   def signup(request):
-      if request.user.is_authenticated:
+      if request.user.is_authenticated: # 이미 로그인한 유저의 경우
           return redirect('reviews:index')
 
       if request.method == 'POST': # 완성된 가입 form 제출
@@ -295,7 +295,7 @@
   {% load bootstrap4 %}
 
   {% block content %}
-  {% if request.resolver_match.url_name == "signup" %}
+  {% if request.resolver_match.url_name == "signup" %} <!-- urlname 이용해 분기! -->
   <h1 class="text-center">Signup</h1>
   {% elif request.resolver_match.url_name == "login" %}
   <h1 class="text-center">Login</h1>
@@ -314,13 +314,13 @@
   ```python
   # accounts/views.py
   def login(request):
-      if request.user.is_authenticated:
+      if request.user.is_authenticated: # 이미 로그인한 유저의 경우
           return redirect('reviews:index')
 
-      if request.method == 'POST':
+      if request.method == 'POST': # 완성된 가입 form 제출
           form = AuthenticationForm(request, request.POST)
-          if form.is_valid():
-              auth_login(request, form.get_user())
+          if form.is_valid(): # 유효성 검증
+              auth_login(request, form.get_user()) # 로그인
               return redirect('reviews:index')
       else:
           form = AuthenticationForm()
@@ -330,402 +330,452 @@
       return render(request, 'accounts/form.html', context)
   ```
 
-  ```
-  <!-- accounts/templates/accounts/login.html -->
-  {% extends 'base.html' %}
-  {% load bootstrap4 %}
-
-  {% block content %}
-  <!-- messages framework 구현(생략) -->
-  <h1 class="text-center">Login</h1>
-  <hr>
-  <form action="" method="POST">
-      {% csrf_token %}
-      {% bootstrap_form form %}
-      {% bootstrap_button "Login" button_type="submit" button_class="btn-primary" %}
-  </form>
-  {% endblock %}
-  ```
-
 - 로그아웃
 
-  ```
+  ```python
   # accounts/views.py
-  @login_required # 로그인 안된 상태에서는 로그인 페이지로 이동
+  @login_required # 로그인 상태의 경우에만
   def logout(request):
-      auth_logout(request) # GET 방식
-      messages.info(request, '로그아웃 되었습니다.')
-      return redirect('community:index')
+      auth_logout(request)
+      return redirect('reviews:index')
   ```
 
-### community app
+- 유저 프로필
 
-- `community/views.py` - `import`
-
+  ```python
+  # accounts/views.py
+  @login_required
+  def profile(request, username):
+      person = get_object_or_404(User, username=username)
+      context = {
+          'person' : person,
+      }
+      return render(request, 'accounts/profile.html', context)
   ```
+
+  ```html
+  <!-- accounts/templates/accounts/profile.html -->
+  - 유저 팔로우/언팔로우 버튼 => 자기 프로필 페이지일 경우 안보이게(조건 분기)
+  - 팔로워 / 팔로잉 수
+  	- dropdown 활용 => 팔로워, 팔로잉 유저 목록 반환 => 클릭시 해당 유저 프로필 페이지로
+  - 유저의 글 목록
+  ```
+
+- 팔로우/언팔로우
+
+  ```python
+  # accounts/views.py
+  def follow(request, username):
+      person = get_object_or_404(User, username=username)
+      user = request.user
+      if user != person: # 스스로는 팔로우/언팔로우 할 수 없음
+          if user in person.followers.all():
+              person.followers.remove(user) # 언팔로우
+          else:
+              person.followers.add(user) # 팔로우
+      return redirect('accounts:profile', person.username)
+  ```
+
+### reviews app
+
+- `reviews /views.py` - `import`
+
+  ```python
   from django.shortcuts import render, redirect, get_object_or_404
-  from django.contrib.auth import get_user_model # User Model 가져오기
+  from django.contrib.auth import get_user_model
   from django.contrib.auth.decorators import login_required
-  from django.views.decorators.http import require_POST # POST 요청만 받음
+  from django.views.decorators.http import require_POST
+
+  from .models import Movie, Review, Comment
   from .forms import ReviewForm, CommentForm
-  from .models import Review, Comment
-  from django.contrib import messages
+  ```
+
+- 전체 리뷰 목록 조회
+
+  ```python
+  # reviews/views.py
+  def index(request):
+      if request.user.is_authenticated: # 로그인한 유저라면
+          User = get_user_model()
+          users = User.objects.all()
+          followings = request.user.followings.all() # 해당 유저가 팔로우 하는 유저들
+          unfollowings = users.difference(followings) # 해당 유저가 팔로우 하지 않는 유저들
+          if len(unfollowings) >= 5: # 팔로우 하지 않는 유저가 5명 이상일 경우에만 랜덤 소팅
+              unfollowings = sorted(unfollowings, reverse=True, key=lambda x: x.followings.all().intersection(request.user.followings.all()).count())[:5]
+
+          if 'following_reviews' in request.POST: # 친구의 글만 보고자 요청했을 때
+              reviews = []
+              for following in followings:
+                  for review in following.reviews.all():
+                      reviews.append(review)
+          else: # 모든 글을 보고자 요청했을 때(default)
+              reviews = Review.objects.order_by('-pk')
+          context = {
+              'reviews':reviews,
+              'unfollowings': unfollowings,
+          }
+      else: # 로그인 하지 않은 경우
+          reviews = Review.objects.order_by('-pk')
+          context = {
+              'reviews':reviews,
+          }
+      return render(request, 'reviews/index.html', context)
+  ```
+
+  ```html
+  <!-- reviews/index.html -->
+  - 팔로우 추천 기능(로그인 한 유저에만 노출)
+  - Content Selector 기능(모든 글 or 팔로우 한 유저 글)
+  - 카드 형태의 글 모음
+  	- 포스터
+  	- 영화명
+  	- 글제목
+  	- 작성자
+  	- 작성시간
+  	- 좋아요(수)
   ```
 
 - 신규 리뷰 생성
 
-  ```
-  # community/views.py
+  ```python
+  # reviews/views.py
   @login_required
   def create(request):
-      if request.method == 'POST': # 완성된 ReviewForm 제출
+      if request.method == 'POST':
           form = ReviewForm(request.POST)
           if form.is_valid():
-              review = form.save(commit=False) # DB save 지연
-              review.user = request.user # 해당 review 객체에 작성자 정보 넣기
+              review = form.save(commit=False) # user 정보 넣어주기 위해
+              review.user = request.user
               review.save()
-              messages.info(request, '글이 생성되었습니다.')
-              return redirect('community:detail', review.pk)
-      else: # 빈 ReviewForm 요청
+              form.save_m2m()
+              return redirect('reviews:detail', review.pk)
+      else:
           form = ReviewForm()
       context = {
-              'form' : form,
-          }
-      return render(request, 'community/form.html', context)
+          'form':form,
+      }
+      return render(request, 'reviews/form.html', context)
   ```
 
-  ```
-  <!-- community/form.html(생성과 수정이 공유) -->
+  ```html
+  <!-- reviews/templates/reviews/form.html create와 update가 공유!-->
   {% extends 'base.html' %}
   {% load bootstrap4 %}
 
   {% block content %}
-  <!-- review 생성 / 수정 분기 -->
-  {% if request.resolver_match.url_name == "create" %} <!-- 생성 -->
+  {% if request.resolver_match.url_name == "create" %}
   <h1 class="text-center">New Review</h1>
-  {% elif request.resolver_match.url_name == "update" %} <!-- 수정 -->
+  {% elif request.resolver_match.url_name == "update" %}
   <h1 class="text-center">Update Review</h1>
   {% endif %}
   <hr>
   <form action="" method = "POST">
   {% csrf_token %}
   {% bootstrap_form form %}
-  {% bootstrap_button "Save" button_type="submit" button_class="btn-primary" %}
+  {% bootstrap_button "저장" button_type="submit" button_class="btn-primary" %}
   </form>
-  {% endblock %}
-  ```
-
-- 전체 리뷰 목록 조회
-
-  ```
-  # community/views.py
-  def index(request):
-      if request.method == 'POST': # 사용자가 정렬 기능을 사용했을 경우
-          if 'view_sort' in request.POST:
-              reviews = Review.objects.order_by('-view_count') # 조회순
-          elif 'created_at_sort' in request.POST:
-              reviews = Review.objects.order_by('-created_at') # 생성순
-          elif 'updated_at_sort' in request.POST:
-              reviews = Review.objects.order_by('-updated_at') # 수정순
-          elif 'rank_sort' in request.POST:
-              reviews = Review.objects.order_by('-rank') # 평점순
-      else: # 일반적인 상황(GET 요청)
-          reviews = Review.objects.all()
-      context = {
-          'reviews': reviews,
-      }
-      return render(request, 'community/review_list.html', context)
-  ```
-
-  ```
-  <!-- community/reveiw_list.html -->
-  {% extends 'base.html' %}
-  {% load bootstrap4 %}
-
-  {% block content %}
-  <!-- messages framework 구현(생략) -->
-  <h1 class="text-center">Reviews</h1>
-  <hr>
-  <!-- 목록 정렬 기능 구현(각 button 별 name 넘겨주기) -->
-  <div class="btn-group" role="group">
-    <button id="btnGroupDrop1" type="button" class="btn border-info text-secondary dropdown-toggle mb-1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-      정렬
-    </button>
-    <form action="{% url 'community:index' %}" method="POST">
-    <div class="dropdown-menu p-0" aria-labelledby="btnGroupDrop1" style="width:10px">
-       {% csrf_token %}
-      <button class="dropdown-item text-secondary text-center" type="submit" name="view_sort">조회순</button>
-      <button class="dropdown-item text-secondary text-center" type="submit" name="rank_sort">평점순</button>
-      <button class="dropdown-item text-secondary text-center" type="submit" name="created_at_sort">생성순</button>
-      <button class="dropdown-item text-secondary text-center" type="submit" name="updated_at_sort">수정순</button>
-      </div>
-  </form>
-  </div>
-  {% if reviews %} <!-- review가 있을 경우 -->
-  <table class="table">
-    <thead class="thead-dark">
-      <tr>
-        <th scope="col">#</th>
-        <th scope="col">Title</th>
-        <th scope="col">Movie</th>
-        <th scope="col">Rank</th>
-        <th scope="col">Updated_at</th>
-        <th scope="col">Author</th>
-        <th scope="col">Views</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for review in reviews %}
-      <tr>
-        <th scope="row">{{ review.pk }}</th>
-        <td><a href="{% url 'community:detail' review.pk %}">{{ review.title }}</a></td>
-        <td>{{ review.movie_title }}</td>
-        <td>{{ review.rank }}</td>
-        <td>{{ review.updated_at }}</td>
-        <td><a href="{% url 'community:author_search' review.user %}">{{ review.user }}</a></td>
-        <td>{{ review.view_count }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %} <!-- review가 없을 경우 -->
-  <h3 class="text-center">작성된 리뷰가 없습니다.</h3>
-  {% endif %}
   {% endblock %}
   ```
 
 - 단일 리뷰 상세 조회 / 댓글 전체 조회 / 댓글 작성 form 표시
 
-  ```
-  # community/views.py
+  ```python
+  # reviews/views.py
   def detail(request, review_pk):
-      comment_form = CommentForm()
-      review = get_object_or_404(Review, pk=review_pk) # 없을 경우 404 ERROR
-      review.view_count += 1 # 조회수 count
-      review.save() # 저장을 해줘야 조회수가 업데이트 된다.
+      comment_form = CommentForm() # 댓글 작성 form
+      review = get_object_or_404(Review, pk=review_pk)
+      review.view_count += 1 # 조회수
+      review.save()
       context = {
-          'review' : review,
-          'comment_form' : comment_form,
+          'review':review,
+          'comment_form':comment_form,
       }
-      return render(request, 'community/review_detail.html', context)
+      return render(request, 'reviews/review_detail.html', context)
   ```
 
-  ```
-  <!-- community/review_detail.html -->
-  {% extends 'base.html' %}
-  {% load bootstrap4 %}
-
-  {% block content %}
-  <!-- messages framework 구현(생략) -->
-  <table class="table">
-    <thead class="thead-dark">
-      <tr>
-        <th scope="col-6" style="font-size:2em; vertical-align:middle;">{{ review.title }}<br>{{ review.movie_title }}</th>
-        <th scope="col-3" style="font-size:2em; vertical-align:middle;">평점 : {{ review.rank }}</th>
-        <th scope="col-3" style="vertical-align:middle;">작성일 : {{ review.created_at }}<br><br>수정일 : {{ review.updated_at }}<br><br>조회수 : {{ review.view_count }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <th scope="row"></th>
-        <td></td>
-        <td class="text-right">
-        	{% if request.user == review.user %} <!-- review 작성자인 경우에만 보이게 -->
-  			<a href="{% url 'community:update' review.pk %}">수정</a>
-  			<a href="{% url 'community:delete' review.pk %}">삭제</a>
-  		{% endif %}
-  		    <a href="{% url 'community:index' %}">뒤로가기</a>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-  {{ review.content }}
-  <br>
-  <br>
-  <h4>댓글 | ({{ review.comment_set.all.count }})</h4>
-  <hr>
-  {% for comment in review.comment_set.all %}
-  <div class="d-flex justify-content-between"><div class="d-inline col-8">{{ comment.content }} </div><div class="d-inline col-4">작성자 : {{ comment.user }}<br>작성일 : {{ comment.created_at }}
-  {% if request.user == comment.user %} <!-- comment 작성자인 경우에만 보이게 -->
-  <br><a href="{% url 'community:comment_delete' review.pk comment.pk %}">댓글 삭제</a>
-  {% endif %}
-  </div></div>
-  <hr>
-  {% empty %}
-  <h4>댓글이 없습니다.</h4>
-  <hr>
-  {% endfor %}
-  {% if user.is_authenticated %} <!-- 로그인 된 경우에만 comment 작성 form 보이게 -->
-  <form action="{% url 'community:comment_create' review.pk %}" method="POST">
-  	{% csrf_token %}
-  	{% bootstrap_form comment_form %}
-  	<button>댓글 작성</button>
-  </form>
-  {% endif %}
-  {% endblock %}
+  ```html
+  <!-- reviews/templates/reviews/review_detail.html -->
+  - 리뷰 상세정보
+      - 글제목
+      - 평점
+      - 작성일
+      - 수정일
+      - 조회수
+      - 영화명
+      - 포스터
+  - 글 작성자에게만 보이는 수정/삭제 버튼
+  - 좋아요 기능
+  - 댓글 작성 form(로그인 한 사람에게만 보임)
+  - 댓글 리스트(글 작성자에게만 삭제 버튼 보임)
   ```
 
 - 기존 리뷰 수정
 
-  ```
-  # community/views.py
+  ```python
+  # reviews/views.py
   @login_required
   def update(request, review_pk):
       review = get_object_or_404(Review, pk=review_pk)
-      if request.user == review.user: # 해당 유저가 작성자와 일치할 경우
+      if request.user == review.user:
           if request.method == 'POST':
-              form = ReviewForm(request.POST, instance=review) # instance!
+              form = ReviewForm(request.POST, instance=review)
               if form.is_valid():
-                  review = form.save()
-                  messages.info(request, '글이 수정되었습니다.')
-                  return redirect('community:detail', review.pk)
+                  form.save()
+                  return redirect('reviews:detail', review.pk)
           else:
               form = ReviewForm(instance=review)
           context = {
-                  'form' : form,
-              }
-          return render(request, 'community/form.html', context)
+              'form':form,
+          }
+          return render(request, 'reviews/form.html', context)
       else:
-          messages.info(request, '해당 글을 수정할 수 없습니다.')
-          return redirect('community:detail', review.pk)
+          return redirect('reviews:detail', review.pk)
   ```
 
 - 기존 리뷰 삭제
 
-  ```
-  # community/views.py
+  ```python
+  # reviews/views.py
   @login_required
   def delete(request, review_pk):
       review = get_object_or_404(Review, pk=review_pk)
-      if request.user == review.user: # 해당 유저가 작성자와 일치할 경우
+      if request.user == review.user:
           review.delete()
-          messages.info(request, '글이 삭제되었습니다.')
-          return redirect('community:index')
+          return redirect('reviews:index')
       else:
-          messages.info(request, '해당 글을 삭제할 수 없습니다.')
-          return redirect('community:detail', review.pk)
+          return redirect('reviews:detail', review.pk)
   ```
 
 - 신규 댓글 생성
 
-  ```
-  # community/views.py
-  @require_POST # POST 요청만 받을 수 있다
-  @login_required # 로그인한 경우에만
+  ```python
+  # reviews/views.py
+  @require_POST
+  @login_required
   def comment_create(request, review_pk):
       review = get_object_or_404(Review, pk=review_pk)
       form = CommentForm(request.POST)
       if form.is_valid():
-          comment = form.save(commit=False) # DB save 지연
-          comment.user = request.user # 작성자 정보
-          comment.review = review # review 정보
+          comment = form.save(commit=False)
+          comment.user = request.user # 작성자
+          comment.review = review # 리뷰글
           comment.save()
-          messages.info(request, '댓글이 생성되었습니다.')
-      return redirect('community:detail', review.pk)
+      return redirect('reviews:detail', review.pk)
   ```
 
 - 기존 댓글 삭제
 
-  ```
-  # community/views.py
+  ```python
+  # reviews/views.py
   @login_required
   def comment_delete(request, review_pk, comment_pk):
       review = get_object_or_404(Review, pk=review_pk)
       comment = get_object_or_404(Comment, pk=comment_pk)
-      if request.user == comment.user: # 해당 유저가 작성자와 일치할 경우
+      if review.user == comment.user: # 글 작성자인 경우에만
           comment.delete()
-          messages.info(request, '댓글이 삭제되었습니다.')
-          return redirect('community:detail', review.pk)
       else:
-          messages.info(request, '해당 댓글을 삭제할 수 없습니다.')
-          return redirect('community:detail', review.pk)
+          pass
+      return redirect('reviews:detail', review.pk)
   ```
 
-- 작성자 별 리뷰 목록
+- 좋아요/좋아요 취소
 
-  ```
-  def author_search(request, author_name):
-      User = get_user_model()
-      user = User.objects.get(username=author_name)
-      if request.method == 'POST':
-          if 'view_sort' in request.POST:
-              reviews = Review.objects.filter(user=user).order_by('-view_count')
-          elif 'created_at_sort' in request.POST:
-              reviews = Review.objects.filter(user=user).order_by('-created_at')
-          elif 'updated_at_sort' in request.POST:
-              reviews = Review.objects.filter(user=user).order_by('-updated_at')
-          elif 'rank_sort' in request.POST:
-              reviews = Review.objects.filter(user=user).order_by('-rank')
+  ```python
+  # reviews/views.py
+  @login_required
+  def like(request, review_pk):
+      review = get_object_or_404(Review, pk=review_pk)
+      if request.user in review.like_users.all():
+          review.like_users.remove(request.user) # 좋아요 취소
       else:
-          reviews = Review.objects.filter(user=user)
+          review.like_users.add(request.user) # 좋아요
+      # 요청이 온 url 주소로 다시 redirect
+      return redirect(request.META.get('HTTP_REFERER'), review.pk)
+  ```
+
+- 태그 검색
+
+  ```python
+  # reviews/views.py
+  def tag_search(request, tag_name):
+      # 특정 태그가 걸려있는 게시물 찾기
+      tag_reviews = Review.objects.filter(tags__name__in=[tag_name]).distinct()
+
       context = {
-          'reviews':reviews,
-          'author_name':author_name,
+          'tag_reviews':tag_reviews,
+          'tag_name':tag_name,
       }
-      return render(request, 'community/author_search.html', context)
+      return render(request, 'reviews/tag_reviews.html', context)
   ```
 
+  ```html
+  <!-- reviews/templates/reviews/tag_reviews.html -->
+  - tag_name을 title로 (h1)
+  - 해당 태그가 걸려있는 게시물 반환
   ```
-  {% extends 'base.html' %}
-  {% load bootstrap4 %}
 
-  {% block content %}
-  <!-- messages framework 구현(생략) -->
-  <h1 class="text-center">{{ author_name }}의 글</h1>
-  <hr>
-  <div class="btn-group" role="group">
-    <button id="btnGroupDrop1" type="button" class="btn border-info text-secondary dropdown-toggle mb-1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-      정렬
-    </button>
-    <form action="{% url 'community:author_search' author_name %}" method="POST">
-    <div class="dropdown-menu p-0" aria-labelledby="btnGroupDrop1" style="width:10px">
-       {% csrf_token %}
-      <button class="dropdown-item text-secondary text-center" type="submit" name="view_sort">조회순</button>
-      <button class="dropdown-item text-secondary text-center" type="submit" name="rank_sort">평점순</button>
-      <button class="dropdown-item text-secondary text-center" type="submit" name="created_at_sort">생성순</button>
-      <button class="dropdown-item text-secondary text-center" type="submit" name="updated_at_sort">수정순</button>
-      </div>
-  </form>
-  </div>
-  {% if reviews %}
-  <table class="table">
-    <thead class="thead-dark">
-      <tr>
-        <th scope="col">#</th>
-        <th scope="col">Title</th>
-        <th scope="col">Movie</th>
-        <th scope="col">Rank</th>
-        <th scope="col">Updated_at</th>
-        <th scope="col">Author</th>
-        <th scope="col">Views</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for review in reviews %}
-      <tr>
-        <th scope="row">{{ review.pk }}</th>
-        <td><a href="{% url 'community:detail' review.pk %}">{{ review.title }}</a></td>
-        <td>{{ review.movie_title }}</td>
-        <td>{{ review.rank }}</td>
-        <td>{{ review.updated_at }}</td>
-        <td>{{ review.user }}</td>
-        <td>{{ review.view_count }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <h3 class="text-center">작성된 리뷰가 없습니다.</h3>
-  {% endif %}
-  {% endblock %}
+- 영화 디테일 정보 조회
+
+  ```python
+  # reviews/views.py
+  def movie_detail(request, movie_pk):
+      movie = get_object_or_404(Movie, pk=movie_pk)
+      context = {
+          'movie' : movie,
+      }
+      return render(request, 'reviews/movie_detail.html', context)
+  ```
+
+  ```html
+  <!-- reviews/templates/reviews/movie_detail.html -->
+  - 영화명
+  - 감독
+  - 배우
+  - 개봉일
+  - 관객수
+  - 줄거리
+  - 포스터
+  - 해당 영화를 리뷰한 글 리스트
   ```
 
 
 
 # 새롭게알게된점
 
--
+### 가상 환경 설정
+
+- `python -m venv venv`
+- `source venv/bin/activate`
+- `deactivate`
+- `django` 비롯한 필요한 library 새롭게 설치해야한다.
+- `pip freeze > requirements.txt`로 설치 library 정보 저장
+  - 프로젝트 다른 곳에서 가져올 때 가상환경 상태에서 `pip install -r requirements.txt`로 필요한 라이브러리 설치
+
+### 해쉬태그 검색 기능 구현
+
+- [django-taggit](https://django-taggit.readthedocs.io/en/latest/index.html) 라이브러리를 활용
+
+1. 환경설정
+
+   ```bash
+   $ pip install django-taggit
+   ```
+
+   ```python
+   # settings.py
+   ...
+   INSTALLED_APPS = [
+   	...
+       'taggit',
+   ]
+
+   # 만약 태그의 대소문자를 구별하고 싶지 않을 경우 다음과 같이 설정해준다.
+   TAGGIT_CASE_INSENSITIVE = True
+   ```
+
+2. model에 태그 필드 생성
+
+   ```python
+   # models.py
+   from django.db import models
+   from django.conf import settings
+   from taggit.managers import TaggableManager # import
+
+   class Review(models.Model):
+   	...
+       tags = TaggableManager() # tags field 생성
+   ```
+
+3. form 관련 설정 - `form.save_m2m()`
+
+   ```python
+   # views.py
+   def create(request):
+       if request.method == 'POST':
+           form = ReviewForm(request.POST)
+           if form.is_valid():
+               review = form.save(commit=False)
+               review.user = request.user
+               review.save()
+               form.save_m2m() # 이렇게 해줘야 태그 정보가 저장됨!
+               return redirect('reviews:detail', review.pk)
+       else:
+           form = ReviewForm()
+       context = {
+           'form':form,
+       }
+       return render(request, 'reviews/form.html', context)
+   ```
+
+4. url 설정
+
+   ```python
+   # urls.py
+   from django.urls import path
+   from . import views
+
+   app_name = 'reviews'
+
+   urlpatterns = [
+       ...
+       ### hashtag 검색 요청 url 주소
+       path('<str:tag_name>/', views.tag_search, name='tag_search'),
+   ]
+   ```
+
+5. view 설정
+
+   ```python
+   # views.py
+   def tag_search(request, tag_name):
+       # 특정 태그가 걸려있는 게시물 찾기
+       tag_reviews = Review.objects.filter(tags__name__in=[tag_name]).distinct()
+
+       context = {
+           'tag_reviews':tag_reviews,
+           'tag_name':tag_name,
+       }
+       return render(request, 'reviews/tag_reviews.html', context)
+   ```
+
+6. template 설정
+
+   ```html
+   <!-- index.html -->
+   ...
+   <!-- 해당 글의 전체 태그를 하나씩 순회하며 출력 -->
+   {% for tag in review.tags.all %}
+   	<!-- 해당 태그를 클릭하면 태그 검색 page로 -->
+   	<a href="{% url 'reviews:tag_search' tag.name %}" class="card-text d-inline">#{{ tag }} </a>
+   {% endfor %}
+   ...
+   ```
+
+   ```html
+   {% extends 'base.html' %}
+
+   {% block content %}
+   <div class="container">
+       <div class="row">
+           <div class="col-12 d-flex flex-column align-items-center">
+             <!-- 해당 태그 이름을 Title로 -->
+             <h1 class="text-center">#{{ tag_name }}</h1>
+           </div>
+           <hr>
+           <!-- 해당 태그를 지닌 글들을 순회하며 정보 출력 -->
+           {% for review in tag_reviews %}
+   			...
+           {% endfor %}
+       </div>
+   </div>
+   {% endblock %}
+   ```
+
+
 
 # 어려웠던점
 
--
+- django 잠깐 놓아다고 그새 까먹는 나의 뇌 🤯
+  - 반복적인 프로젝트로 극복해보쟈
+
+- 아직 해결하지 못한 배포...

@@ -5,8 +5,7 @@
 <table class="table">
   <thead class="thead-dark">
     <tr>
-      <th scope="col-3" style="font-size:2em; vertical-align:middle;">
-        {{ review.title }}<br>{{ review.movie_title }}</th>
+      <th scope="col-3" style="font-size:2em; vertical-align:middle;">{{ review.title }}<br></th>
       <th scope="col-3" style="font-size:2em; vertical-align:middle;">평점 : {{ review.rank }}</th>
       <th scope="col-3" style="vertical-align:middle;">작성일 : {{ review.created_at }}<br><br>수정일 : {{ review.updated_at }}<br><br>조회수 : {{ review.view_count }}<br><br>영화명 : {{ review.movie }}</th>
       <th scope="col-3" style="vertical-align:middle"><a href="{% url 'reviews:movie_detail' review.movie.pk %}"><img class="d-inline" src={{ review.movie.poster_url }} style="width:200px; height:200px;"></a></th>
@@ -19,9 +18,9 @@
       <td></td>
       <td class="text-right">
       	{% if request.user == review.user %}
-			<a href="{% url 'reviews:update' review.pk %}">수정</a>
-			<a href="{% url 'reviews:delete' review.pk %}">삭제</a>
-		{% endif %}
+    			<a href="{% url 'reviews:update' review.pk %}">수정</a>
+    			<a href="{% url 'reviews:delete' review.pk %}">삭제</a>
+    		{% endif %}
 		    <a href="{% url 'reviews:index' %}">뒤로가기</a>
       </td>
     </tr>
