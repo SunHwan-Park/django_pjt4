@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load bootstrap4 %}
+{% block content %}
+<div class="container">
+    <div class="col-12 d-flex flex-column align-items-center">
+      <h1 class="text-center">새로운 사람들을 팔로우 해보세요!</h1>
+      <ul>
+      {% for user in unfollowings %}
+        {% if user != request.user %}
+          <li class="m-3 d-inline"><a href="{% url 'accounts:profile' user.username %}">{{ user.username }}</a></li>
+        {% endif %}
+      {% endfor %}
+      </ul>
+    </div>
+    <hr>
+    <div class="btn-group" role="group">
+      <button id="btnGroupDrop1" type="button" class="btn border-info text-secondary dropdown-toggle mb-1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        Content Selector
+      </button>
+      <form action="{% url 'reviews:index' %}" method="POST">
+        <div class="dropdown-menu p-0" aria-labelledby="btnGroupDrop1" style="width:10px">
+           {% csrf_token %}
+          <button class="dropdown-item text-secondary text-center" type="submit" name="all_reviews">모든 글</button>
+          <button class="dropdown-item text-secondary text-center" type="submit" name="following_reviews">팔로우 하는 사람의 글</button>
+        </div>
+      </form>
+    </div>
+    <div class="row">
+        {% for review in reviews %}
+        <div class="card col-4" style="width: 18rem;">
+          <div class="card-body">
+            <p><a href="{% url 'reviews:movie_detail' review.movie.pk %}"><img class="d-inline" src={{ review.movie.poster_url }} style="width:100px; height:100px;"></a> <a href="{% url 'reviews:movie_detail' review.movie.pk %}"><p>{{ review.movie.title }}</p></a></p>
+            <h5 class="card-title"><a href="{% url 'reviews:detail' review.pk %}">{{ review.title }}</a></h5>
+            <p class="card-text"><a href="{% url 'accounts:profile' review.user.username %}">{{ review.user.username }}</a></p>
+            {% for tag in review.tags.all %}
+            <a href="{% url 'reviews:tag_search' tag.name %}" class="card-text d-inline">#{{ tag }} </a>
+            {% endfor %}
+            <p class="card-text">{{ review.created_at }}</p>
+            {% if request.user in review.like_users.all %}
+            <a href="{% url 'reviews:like' review.id %}" style="font-size: 2em; color: red;"><i class="far fa-kiss-wink-heart"></i></a>
+            {% else %}
+            <a href="{% url 'reviews:like' review.id %}" style="font-size: 2em; color: Dodgerblue;"><i class="far fa-kiss"></i></a>
+            {% endif %}
+            Like: {{ review.like_users.count }}
+          </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

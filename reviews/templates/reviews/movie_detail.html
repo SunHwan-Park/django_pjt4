@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load bootstrap4 %}
+{% block content %}
+<div class="container">
+    <div class="row d-flex flex-column align-items-center">
+        <p class="d-block"><img src={{ movie.poster_url }} style="width:400px; height:400px;"></p>
+        <h3>제목 : {{ movie.title }}</h3><br>
+        <h4>감독 : {{ movie.director }}</h4><br>
+        <h4>배우 : {{ movie.actors }}</h4><br>
+        <h4>개봉일 : {{ movie.open_date }}</h4><br>
+        <h4>관객수 : {{ movie.audience_num }}</h4><br>
+        <p><h3>줄거리</h3><br>
+        {{ movie.description}}</p>
+    </div>
+    <hr>
+    <div>
+        {% for review in movie.reviews.all %}
+        <div class="card col-4" style="width: 18rem;">
+          <div class="card-body">
+            <p><img class="d-inline" src={{ review.movie.poster_url }} style="width:100px; height:100px;"> <h5>{{ review.movie.title }}</h5></p>
+            <h5 class="card-title"><a href="{% url 'reviews:detail' review.pk %}">{{ review.title }}</a></h5>
+            <p class="card-text"><a href="{% url 'accounts:profile' review.user.username %}">{{ review.user.username }}</a></p>
+            <p class="card-text">{{ review.created_at }}</p>
+            {% if request.user in review.like_users.all %}
+            <a href="{% url 'reviews:like' review.id %}" style="font-size: 2em; color: red;"><i class="far fa-kiss-wink-heart"></i></a>
+            {% else %}
+            <a href="{% url 'reviews:like' review.id %}" style="font-size: 2em; color: Dodgerblue;"><i class="far fa-kiss"></i></a>
+            {% endif %}
+            Like: {{ review.like_users.count }}
+          </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12 d-flex flex-column align-items-center">
+          <!-- 해당 태그 이름을 Title로 -->
+          <h1 class="text-center">#{{ tag_name }}</h1>
+        </div>
+        <hr>
+        <!-- 해당 태그를 지닌 글들을 순회하며 정보 출력 -->
+        {% for review in tag_reviews %}
+        <div class="card col-4" style="width: 18rem;">
+          <div class="card-body">
+            <p><a href="{% url 'reviews:movie_detail' review.movie.pk %}"><img class="d-inline" src={{ review.movie.poster_url }} style="width:100px; height:100px;"></a> <a href="{% url 'reviews:movie_detail' review.movie.pk %}"><h5>{{ review.movie.title }}</a></h5></p>
+            <h5 class="card-title"><a href="{% url 'reviews:detail' review.pk %}">{{ review.title }}</a></h5>
+            <p class="card-text"><a href="{% url 'accounts:profile' review.user.username %}">{{ review.user.username }}</a></p>
+            {% for tag in review.tags.all %}
+            <a href="{% url 'reviews:tag_search' tag.name %}" class="card-text d-inline">#{{ tag }} </a>
+            {% endfor %}
+            <p class="card-text">{{ review.created_at }}</p>
+            {% if request.user in review.like_users.all %}
+            <a href="{% url 'reviews:like' review.id %}" style="font-size: 2em; color: red;"><i class="far fa-kiss-wink-heart"></i></a>
+            {% else %}
+            <a href="{% url 'reviews:like' review.id %}" style="font-size: 2em; color: Dodgerblue;"><i class="far fa-kiss"></i></a>
+            {% endif %}
+            Like: {{ review.like_users.count }}
+          </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
