@@ -8,6 +8,9 @@ from .forms import CustomUserCreationForm
 # Create your views here.
 
 def signup(request):
+    if request.user.is_authenticated:
+        return redirect('reviews:index')
+
     if request.method == 'POST':
         form = CustomUserCreationForm(request.POST)
         if form.is_valid():

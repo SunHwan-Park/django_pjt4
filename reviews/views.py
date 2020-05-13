@@ -122,7 +122,6 @@ def like(request, review_pk):
         review.like_users.add(request.user)
     return redirect(request.META.get('HTTP_REFERER'), review.pk)
 
-@login_required
 def tag_search(request, tag_name):
     tag_reviews = Review.objects.filter(tags__name__in=[tag_name]).distinct()
 
