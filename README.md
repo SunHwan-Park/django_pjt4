@@ -771,6 +771,142 @@
    {% endblock %}
    ```
 
+### heroku 배포
+
+0. [heroku](https://heroku.com/) 계정 생성
+
+1. heroku 로그인
+
+   ```bash
+   # c9의 경우, heroku가 이미 설치되어 있다.
+   $ heroku login -i
+   ```
+
+2. 가상환경 생성 및 실행
+
+   ```bash
+   $ python -m venv venv
+   $ source venv/bin/activate
+   ```
+
+3. 필요한 패키지 설치
+
+   ```bash
+   $ pip install django dj-database-url gunicorn whitenoise (django-bootstrap4) (django-taggit)
+   ```
+
+4. `Procfile`
+
+   ```
+   web: gunicorn [프로젝트 이름].wsgi --log-file -
+   ```
+
+5. `requirements.txt`
+
+   ```bash
+   $ pip freeze > requirements.txt
+   ```
+
+   - `requirements.txt`에 `psycopg2` 패키지 추가
+
+6. `runtime.txt`
+
+   ```
+   # 버전 체크!
+   python-3.7.6
+   ```
+
+7. `settings.py`
+
+   - DB 관련
+
+     ```python
+     # Heroku: Update database configuration from $DATABASE_URL.
+     import dj_database_url
+     db_from_env = dj_database_url.config(conn_max_age=500)
+     DATABASES['default'].update(db_from_env)
+     ```
+
+   - static 파일 관련
+
+     ```python
+     # Static files (CSS, JavaScript, Images)
+     # https://docs.djangoproject.com/en/2.0/howto/static-files/
+
+     # The absolute path to the directory where collectstatic will collect static files for deployment.
+     STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+     # The URL to use when referring to static files (where they will be served from)
+     STATIC_URL = '/static/'
+     ```
+
+   - MIDDLEWARE
+
+     ```python
+     MIDDLEWARE = [
+         'django.middleware.security.SecurityMiddleware',
+         'whitenoise.middleware.WhiteNoiseMiddleware', # 추가하기
+         'django.contrib.sessions.middleware.SessionMiddleware',
+         'django.middleware.common.CommonMiddleware',
+         'django.middleware.csrf.CsrfViewMiddleware',
+         'django.contrib.auth.middleware.AuthenticationMiddleware',
+         'django.contrib.messages.middleware.MessageMiddleware',
+         'django.middleware.clickjacking.XFrameOptionsMiddleware',
+     ]
+     ```
+
+   - ```python
+     # Simplified static file serving.
+     # https://warehouse.python.org/project/whitenoise/
+     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+     ```
+
+8. `.gitignore`
+
+   - django용 gitignore 템플릿
+   - `venv/` 추가
+
+9. `git` versioning
+
+   ```bash
+   $ git init
+   $ git add .
+   $ git commit -m "first commit"
+   ```
+
+10. heroku 앱 생성 및 push
+
+    - heroku 앱 생성
+
+      ```bash
+      $ heroku create [앱 이름]
+      ```
+
+    - git push
+
+      ```bash
+      $ git push heroku master
+      ```
+
+11. heroku migration/createsuperuser
+
+    - heroku로 앱을 올리면서 DB 정보가 사라지기 때문에 새롭게 migration을 진행해줘야 한다.
+
+    ```bash
+    $ heroku run python manage.py migrate
+    $ heroku run python manage.py createsuperuser
+    ```
+
+    - 이 파트를 heroku site에서 진행할 수 있다.
+      - `Open app` 버튼 옆에 `More` - `Run console`
+
+12. heroku app 실행
+
+    ```bash
+    $ heroku open
+    ```
+
+
 
 
 # 어려웠던점
@@ -778,4 +914,4 @@
 - django 잠깐 놓아다고 그새 까먹는 나의 뇌 🤯
   - 반복적인 프로젝트로 극복해보쟈
 
-- 아직 해결하지 못한 배포...
+- heroku 배포...
